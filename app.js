@@ -1,3 +1,21 @@
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+import {
+  getFirestore, collection, doc, setDoc, onSnapshot, serverTimestamp
+} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+
+import { firebaseConfig } from "./firebase-config.js";
+
+const fbApp = initializeApp(firebaseConfig);
+const db = getFirestore(fbApp);
+
+// “Sala”/tablero. Puedes usar un id fijo o por plataforma/proyecto.
+const PROJECT_ID = "sigma-main";
+
+// refs
+const cellsCol = collection(db, "projects", PROJECT_ID, "cells");
+const metaCol = collection(db, "projects", PROJECT_ID, "meta");
+
+
 "use strict";
 
 /**
@@ -12,7 +30,7 @@ const LS_KEY = "sigma_matrix_status_v2";
 const LS_META_KEY = "sigma_matrix_meta_v1";
 
 // Catálogos base (reemplaza por los reales)
-const pozos = ["CME-II","GERSEMI","CME-I","NJORD","GALAR","RIG-702","RIG-703"];
+const pozos = ["CME-II", "GERSEMI", "CME-I", "NJORD", "GALAR", "RIG-702", "RIG-703"];
 
 const items = [
   "CABEZAL",
@@ -52,11 +70,11 @@ const items = [
 ];
 
 const STATUS = [
-  { key: "none",   label: "N/A", cls: "s-none" },
-  { key: "green",  label: "Verde",       cls: "s-green" },
-  { key: "red",    label: "Rojo",        cls: "s-red" },
-  { key: "yellow", label: "Amarillo",    cls: "s-yellow" },
-  { key: "blue",   label: "Azul",        cls: "s-blue" }
+  { key: "none", label: "N/A", cls: "s-none" },
+  { key: "green", label: "Verde", cls: "s-green" },
+  { key: "red", label: "Rojo", cls: "s-red" },
+  { key: "yellow", label: "Amarillo", cls: "s-yellow" },
+  { key: "blue", label: "Azul", cls: "s-blue" }
 ];
 
 // state[item][pozo] = key
@@ -69,6 +87,55 @@ document.addEventListener("DOMContentLoaded", () => {
   const table = document.getElementById("matrix");
 
   buildTable(table);
+
+  listenRealtime();
+
+  function listenRealtime() {
+    // Celdas (estatus)
+    onSnapshot(cellsCol, (snap) => {
+      snap.docChanges().forEach((chg) => {
+        const d = chg.doc.data();
+        if (!d?.platform || !d?.item) return;
+
+        // Actualiza memoria local
+        state[d.item] ||= {};
+        state[d.item][d.platform] = d.status || "none";
+
+        // Actualiza UI (sin rebuild)
+        const cell = document.querySelector(
+          `.cell[data-item="${CSS.escape(d.item)}"][data-pozo="${CSS.escape(d.platform)}"]`
+        );
+        if (cell) {
+          const dot = cell.querySelector(".dot");
+          if (dot) dot.className = "dot " + statusClass(d.status || "none");
+          const menuItems = cell.querySelectorAll(".menu-item");
+          menuItems.forEach(b => b.setAttribute("aria-checked", String(b.dataset.value === (d.status || "none"))));
+        }
+      });
+    });
+
+    // Meta (pozo actual/futuro/etapa)
+    onSnapshot(metaCol, (snap) => {
+      snap.docChanges().forEach((chg) => {
+        const d = chg.doc.data();
+        if (!d?.platform) return;
+
+        meta[d.platform] ||= { actual: "", futuro: "", etapa: "" };
+        if (typeof d.actual === "string") meta[d.platform].actual = d.actual;
+        if (typeof d.futuro === "string") meta[d.platform].futuro = d.futuro;
+        if (typeof d.etapa === "string") meta[d.platform].etapa = d.etapa;
+
+        // Pinta inputs (sin pisar si el usuario está escribiendo)
+        ["actual", "futuro", "etapa"].forEach((field) => {
+          const el = document.querySelector(
+            `.meta-input[data-pozo="${CSS.escape(d.platform)}"][data-field="${field}"]`
+          );
+          if (el && document.activeElement !== el) el.value = meta[d.platform][field] || "";
+        });
+      });
+    });
+  }
+
 
   // Clicks: abrir/cerrar menú y seleccionar estatus
   table.addEventListener("click", (e) => {
@@ -108,6 +175,17 @@ document.addEventListener("DOMContentLoaded", () => {
     meta[pozo] ||= { actual: "", futuro: "", etapa: "" };
     meta[pozo][field] = input.value;
     saveMeta(meta);
+    
+    pushMetaUpdate(pozo, field, input.value);
+
+    async function pushMetaUpdate(platform, field, value) {
+      await setDoc(doc(db, "projects", PROJECT_ID, "meta", platform), {
+        platform,
+        [field]: value,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+    }
+
   });
 
   // Cerrar menús al click fuera
@@ -130,7 +208,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 });
 
-function buildTable(tableEl){
+function buildTable(tableEl) {
   const thead = document.createElement("thead");
 
   // Row 1: encabezado de pozos
@@ -154,7 +232,7 @@ function buildTable(tableEl){
   const metaRows = [
     { field: "actual", label: "POZO ACTUAL", placeholder: "POZO ACTUAL" },
     { field: "futuro", label: "POZO FUTURO", placeholder: "POZO FUTURO" },
-    { field: "etapa",  label: "ETAPA",       placeholder: 'ETAPA' }
+    { field: "etapa", label: "ETAPA", placeholder: 'ETAPA' }
   ];
 
   for (const r of metaRows) {
@@ -259,7 +337,7 @@ function buildTable(tableEl){
   tableEl.appendChild(tbody);
 }
 
-function setStatus(item, pozo, value, cellEl){
+function setStatus(item, pozo, value, cellEl) {
   if (!item || !pozo) return;
 
   state[item] ||= {};
@@ -275,9 +353,19 @@ function setStatus(item, pozo, value, cellEl){
   menuItems.forEach(b => {
     b.setAttribute("aria-checked", String(b.dataset.value === value));
   });
+  pushCellUpdate(pozo, item, value);
+
+  async function pushCellUpdate(platform, item, status) {
+    const id = `${platform}__${item}`; // válido mientras platform/item no tenga caracteres raros; si quieres, lo sanitizamos
+    await setDoc(doc(db, "projects", PROJECT_ID, "cells", id), {
+      platform, item, status,
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+  }
+
 }
 
-function toggleMenu(dotBtn){
+function toggleMenu(dotBtn) {
   const cell = dotBtn.closest(".cell");
   if (!cell) return;
 
@@ -294,12 +382,12 @@ function toggleMenu(dotBtn){
   }
 }
 
-function closeAllMenus(){
+function closeAllMenus() {
   document.querySelectorAll(".menu.open").forEach(m => m.classList.remove("open"));
   document.querySelectorAll(".dot-btn[aria-expanded='true']").forEach(b => b.setAttribute("aria-expanded", "false"));
 }
 
-function positionMenu(menu){
+function positionMenu(menu) {
   // Default: centrado bajo el punto (si tu CSS ya centra, esto lo respeta)
   menu.style.left = "50%";
   menu.style.right = "auto";
@@ -332,30 +420,30 @@ function positionMenu(menu){
   }
 }
 
-function statusClass(key){
+function statusClass(key) {
   return STATUS.find(s => s.key === key)?.cls || "s-none";
 }
 
-function loadState(){
-  try{
+function loadState() {
+  try {
     return JSON.parse(localStorage.getItem(LS_KEY)) || {};
   } catch {
     return {};
   }
 }
 
-function saveState(next){
+function saveState(next) {
   localStorage.setItem(LS_KEY, JSON.stringify(next));
 }
 
-function loadMeta(){
-  try{
+function loadMeta() {
+  try {
     return JSON.parse(localStorage.getItem(LS_META_KEY)) || {};
   } catch {
     return {};
   }
 }
 
-function saveMeta(next){
+function saveMeta(next) {
   localStorage.setItem(LS_META_KEY, JSON.stringify(next));
 }
