@@ -1,36 +1,41 @@
+// app.js (ES Module)
+// Requiere en index.html: <script type="module" src="./app.js"></script>
+// Requiere archivo: firebase-config.js exportando { firebaseConfig }
+
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 import {
-  getFirestore, collection, doc, setDoc, onSnapshot, serverTimestamp
+  getFirestore,
+  collection,
+  doc,
+  setDoc,
+  onSnapshot,
+  serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
 import { firebaseConfig } from "./firebase-config.js";
 
+/* =========================
+   Firebase / Firestore setup
+========================= */
 const fbApp = initializeApp(firebaseConfig);
 const db = getFirestore(fbApp);
 
-// “Sala”/tablero. Puedes usar un id fijo o por plataforma/proyecto.
-const PROJECT_ID = "sigma-main";
+// “Sala” o tablero (puedes cambiarlo o parametrizarlo por URL ?project=...)
+const PROJECT_ID = new URLSearchParams(location.search).get("project") || "sigma-main";
 
-// refs
 const cellsCol = collection(db, "projects", PROJECT_ID, "cells");
 const metaCol = collection(db, "projects", PROJECT_ID, "meta");
 
-
-"use strict";
-
-/**
- * Matriz Pozos x Materiales
- * - Control principal: círculo (botón) por celda
- * - Click abre menú contextual con estatus
- * - Persistencia en localStorage
- * - NUEVO: Filas meta en encabezado (POZO ACTUAL / POZO FUTURO / ETAPA) con inputs por columna
- */
-
+/* =========================
+   Local persistence (cache)
+========================= */
 const LS_KEY = "sigma_matrix_status_v2";
 const LS_META_KEY = "sigma_matrix_meta_v1";
 
-// Catálogos base (reemplaza por los reales)
-const pozos = ["CME-II", "GERSEMI", "CME-I", "NJORD", "GALAR", "RIG-702", "RIG-703"];
+/* =========================
+   Catálogos base (ajusta a tus reales)
+========================= */
+const pozos = ["PAE", "CME-II", "GRID", "GERSEMI", "CME-I", "NJORD", "GALAR", "RIG-702", "RIG-703"];
 
 const items = [
   "CABEZAL",
@@ -66,78 +71,36 @@ const items = [
   "CEDAZOS",
   "EQUIPO DE AFORO",
   "TUBERÍA FLEXIBLE",
-  "SERV. DE ESTIMULACIÓN"
+  "SERV. DE ESTIMULACIÓN",
 ];
 
 const STATUS = [
-  { key: "none", label: "N/A", cls: "s-none" },
+  { key: "none", label: "Sin estatus", cls: "s-none" },
   { key: "green", label: "Verde", cls: "s-green" },
   { key: "red", label: "Rojo", cls: "s-red" },
   { key: "yellow", label: "Amarillo", cls: "s-yellow" },
-  { key: "blue", label: "Azul", cls: "s-blue" }
+  { key: "blue", label: "Azul", cls: "s-blue" },
 ];
 
+/* =========================
+   In-memory state
+========================= */
 // state[item][pozo] = key
 let state = loadState();
 
-// meta[pozo] = { actual: "", futuro: "", etapa: "" }
+// meta[pozo] = { actual:"", futuro:"", etapa:"" }
 let meta = loadMeta();
 
+/* =========================
+   Boot
+========================= */
 document.addEventListener("DOMContentLoaded", () => {
   const table = document.getElementById("matrix");
+  if (!table) return;
 
   buildTable(table);
 
-  listenRealtime();
-
-  function listenRealtime() {
-    // Celdas (estatus)
-    onSnapshot(cellsCol, (snap) => {
-      snap.docChanges().forEach((chg) => {
-        const d = chg.doc.data();
-        if (!d?.platform || !d?.item) return;
-
-        // Actualiza memoria local
-        state[d.item] ||= {};
-        state[d.item][d.platform] = d.status || "none";
-
-        // Actualiza UI (sin rebuild)
-        const cell = document.querySelector(
-          `.cell[data-item="${CSS.escape(d.item)}"][data-pozo="${CSS.escape(d.platform)}"]`
-        );
-        if (cell) {
-          const dot = cell.querySelector(".dot");
-          if (dot) dot.className = "dot " + statusClass(d.status || "none");
-          const menuItems = cell.querySelectorAll(".menu-item");
-          menuItems.forEach(b => b.setAttribute("aria-checked", String(b.dataset.value === (d.status || "none"))));
-        }
-      });
-    });
-
-    // Meta (pozo actual/futuro/etapa)
-    onSnapshot(metaCol, (snap) => {
-      snap.docChanges().forEach((chg) => {
-        const d = chg.doc.data();
-        if (!d?.platform) return;
-
-        meta[d.platform] ||= { actual: "", futuro: "", etapa: "" };
-        if (typeof d.actual === "string") meta[d.platform].actual = d.actual;
-        if (typeof d.futuro === "string") meta[d.platform].futuro = d.futuro;
-        if (typeof d.etapa === "string") meta[d.platform].etapa = d.etapa;
-
-        // Pinta inputs (sin pisar si el usuario está escribiendo)
-        ["actual", "futuro", "etapa"].forEach((field) => {
-          const el = document.querySelector(
-            `.meta-input[data-pozo="${CSS.escape(d.platform)}"][data-field="${field}"]`
-          );
-          if (el && document.activeElement !== el) el.value = meta[d.platform][field] || "";
-        });
-      });
-    });
-  }
-
-
-  // Clicks: abrir/cerrar menú y seleccionar estatus
+  // Click: abrir/cerrar menú y seleccionar estatus
   table.addEventListener("click", (e) => {
     const dotBtn = e.target.closest?.(".dot-btn");
     if (dotBtn) {
@@ -149,6 +112,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const optBtn = e.target.closest?.(".menu-item");
     if (optBtn) {
       e.preventDefault();
+
       const cell = optBtn.closest(".cell");
       if (!cell) return;
 
@@ -162,7 +126,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // NUEVO: Guardar cambios en inputs meta (POZO ACTUAL/FUTURO/ETAPA)
+  // Inputs meta: POZO ACTUAL / FUTURO / ETAPA (con debounce para no saturar Firestore)
   table.addEventListener("input", (e) => {
     const input = e.target;
     if (!(input instanceof HTMLInputElement)) return;
@@ -175,17 +139,8 @@ document.addEventListener("DOMContentLoaded", () => {
     meta[pozo] ||= { actual: "", futuro: "", etapa: "" };
     meta[pozo][field] = input.value;
     saveMeta(meta);
-    
-    pushMetaUpdate(pozo, field, input.value);
 
-    async function pushMetaUpdate(platform, field, value) {
-      await setDoc(doc(db, "projects", PROJECT_ID, "meta", platform), {
-        platform,
-        [field]: value,
-        updatedAt: serverTimestamp()
-      }, { merge: true });
-    }
-
+    debounceMetaWrite(pozo, field, input.value);
   });
 
   // Cerrar menús al click fuera
@@ -199,26 +154,23 @@ document.addEventListener("DOMContentLoaded", () => {
     if (e.key === "Escape") closeAllMenus();
   });
 
-  btnReset.addEventListener("click", () => {
-    state = {};
-    meta = {};
-    localStorage.removeItem(LS_KEY);
-    localStorage.removeItem(LS_META_KEY);
-    buildTable(table);
-  });
+  // Realtime: escuchar cambios compartidos
+  listenRealtime();
 });
 
+/* =========================
+   UI build
+========================= */
 function buildTable(tableEl) {
   const thead = document.createElement("thead");
 
-  // Row 1: encabezado de pozos
+  // Row 1: PLATAFORMAS (sticky por CSS) — marcamos clase
   const trTop = document.createElement("tr");
   trTop.className = "platform-row";
 
-
   const thCorner = document.createElement("th");
   thCorner.className = "corner";
-  thCorner.textContent = ""; // opcional: aquí puedes poner "HTAS" o un logo
+  thCorner.textContent = ""; // opcional
   trTop.appendChild(thCorner);
 
   for (const p of pozos) {
@@ -228,11 +180,11 @@ function buildTable(tableEl) {
   }
   thead.appendChild(trTop);
 
-  // NUEVO: Rows meta: POZO ACTUAL / POZO FUTURO / ETAPA
+  // Rows meta: POZO ACTUAL / POZO FUTURO / ETAPA
   const metaRows = [
-    { field: "actual", label: "POZO ACTUAL", placeholder: "POZO ACTUAL" },
-    { field: "futuro", label: "POZO FUTURO", placeholder: "POZO FUTURO" },
-    { field: "etapa", label: "ETAPA", placeholder: 'ETAPA' }
+    { field: "actual", label: "POZO ACTUAL", placeholder: "Ej. BACAB 308" },
+    { field: "futuro", label: "POZO FUTURO", placeholder: "Ej. BACAB 309" },
+    { field: "etapa", label: "ETAPA", placeholder: 'Ej. 20"' },
   ];
 
   for (const r of metaRows) {
@@ -253,7 +205,6 @@ function buildTable(tableEl) {
       input.dataset.pozo = p;
       input.dataset.field = r.field;
       input.placeholder = r.placeholder;
-
       input.value = meta[p]?.[r.field] || "";
 
       th.appendChild(input);
@@ -263,7 +214,7 @@ function buildTable(tableEl) {
     thead.appendChild(tr);
   }
 
-  // TBODY (matriz)
+  // Body
   const tbody = document.createElement("tbody");
 
   for (const item of items) {
@@ -281,8 +232,9 @@ function buildTable(tableEl) {
       cell.dataset.item = item;
       cell.dataset.pozo = pozo;
 
-      const current = (state[item] && state[item][pozo]) ? state[item][pozo] : "none";
+      const current = state[item]?.[pozo] ?? "none";
 
+      // Botón (circulo grande) + dot (rellena todo)
       const dotBtn = document.createElement("button");
       dotBtn.type = "button";
       dotBtn.className = "dot-btn";
@@ -290,10 +242,11 @@ function buildTable(tableEl) {
       dotBtn.setAttribute("aria-expanded", "false");
       dotBtn.setAttribute("title", "Cambiar estatus");
 
-      const dot = document.createElement("span");
-      dot.className = "dot " + statusClass(current);
-      dotBtn.appendChild(dot);
+      const dotSpan = document.createElement("span");
+      dotSpan.className = "dot " + statusClass(current);
+      dotBtn.appendChild(dotSpan);
 
+      // Menú contextual
       const menu = document.createElement("div");
       menu.className = "menu";
       menu.setAttribute("role", "menu");
@@ -317,8 +270,8 @@ function buildTable(tableEl) {
 
         left.appendChild(md);
         left.appendChild(label);
-
         btn.appendChild(left);
+
         menu.appendChild(btn);
       }
 
@@ -337,34 +290,47 @@ function buildTable(tableEl) {
   tableEl.appendChild(tbody);
 }
 
+/* =========================
+   Status interactions
+========================= */
 function setStatus(item, pozo, value, cellEl) {
   if (!item || !pozo) return;
 
+  // 1) Local memory + cache
   state[item] ||= {};
   state[item][pozo] = value;
   saveState(state);
 
-  // Actualiza punto
+  // 2) UI update inmediato
   const dot = cellEl.querySelector(".dot");
   if (dot) dot.className = "dot " + statusClass(value);
 
-  // Actualiza selección visual en menú
   const menuItems = cellEl.querySelectorAll(".menu-item");
-  menuItems.forEach(b => {
-    b.setAttribute("aria-checked", String(b.dataset.value === value));
+  menuItems.forEach((b) => b.setAttribute("aria-checked", String(b.dataset.value === value)));
+
+  // 3) Push a Firestore (compartido)
+  pushCellUpdate(pozo, item, value).catch((err) => {
+    console.error("Firestore cell update failed:", err);
   });
-  pushCellUpdate(pozo, item, value);
-
-  async function pushCellUpdate(platform, item, status) {
-    const id = `${platform}__${item}`; // válido mientras platform/item no tenga caracteres raros; si quieres, lo sanitizamos
-    await setDoc(doc(db, "projects", PROJECT_ID, "cells", id), {
-      platform, item, status,
-      updatedAt: serverTimestamp()
-    }, { merge: true });
-  }
-
 }
 
+async function pushCellUpdate(platform, item, status) {
+  const id = makeDocId(`cell|${platform}|${item}`);
+  await setDoc(
+    doc(db, "projects", PROJECT_ID, "cells", id),
+    {
+      platform,
+      item,
+      status,
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true }
+  );
+}
+
+/* =========================
+   Menu open/close + positioning
+========================= */
 function toggleMenu(dotBtn) {
   const cell = dotBtn.closest(".cell");
   if (!cell) return;
@@ -383,12 +349,14 @@ function toggleMenu(dotBtn) {
 }
 
 function closeAllMenus() {
-  document.querySelectorAll(".menu.open").forEach(m => m.classList.remove("open"));
-  document.querySelectorAll(".dot-btn[aria-expanded='true']").forEach(b => b.setAttribute("aria-expanded", "false"));
+  document.querySelectorAll(".menu.open").forEach((m) => m.classList.remove("open"));
+  document
+    .querySelectorAll(".dot-btn[aria-expanded='true']")
+    .forEach((b) => b.setAttribute("aria-expanded", "false"));
 }
 
 function positionMenu(menu) {
-  // Default: centrado bajo el punto (si tu CSS ya centra, esto lo respeta)
+  // Default centrado bajo el punto (si tu CSS ya lo centra, esto lo refuerza)
   menu.style.left = "50%";
   menu.style.right = "auto";
   menu.style.transform = "translateX(-50%)";
@@ -397,14 +365,12 @@ function positionMenu(menu) {
 
   const rect = menu.getBoundingClientRect();
 
-  // Si se sale a la derecha, alinear a la derecha del contenedor
   if (rect.right > window.innerWidth - 8) {
     menu.style.left = "auto";
     menu.style.right = "0";
     menu.style.transform = "none";
   }
 
-  // Si se sale a la izquierda, alinear a la izquierda del contenedor
   const rect2 = menu.getBoundingClientRect();
   if (rect2.left < 8) {
     menu.style.left = "0";
@@ -412,7 +378,6 @@ function positionMenu(menu) {
     menu.style.transform = "none";
   }
 
-  // Si se sale abajo, subir el menú
   const rect3 = menu.getBoundingClientRect();
   if (rect3.bottom > window.innerHeight - 8) {
     menu.style.top = "auto";
@@ -420,8 +385,109 @@ function positionMenu(menu) {
   }
 }
 
+/* =========================
+   Realtime listeners (Firestore)
+========================= */
+function listenRealtime() {
+  // Cells
+  onSnapshot(
+    cellsCol,
+    (snap) => {
+      snap.docChanges().forEach((chg) => {
+        const d = chg.doc.data();
+        if (!d?.platform || !d?.item) return;
+
+        const nextStatus = d.status || "none";
+
+        // Update memory
+        state[d.item] ||= {};
+        state[d.item][d.platform] = nextStatus;
+        saveState(state);
+
+        // Update UI (no rebuild)
+        const cell = document.querySelector(
+          `.cell[data-item="${cssEscape(d.item)}"][data-pozo="${cssEscape(d.platform)}"]`
+        );
+        if (cell) {
+          const dot = cell.querySelector(".dot");
+          if (dot) dot.className = "dot " + statusClass(nextStatus);
+          const menuItems = cell.querySelectorAll(".menu-item");
+          menuItems.forEach((b) =>
+            b.setAttribute("aria-checked", String(b.dataset.value === nextStatus))
+          );
+        }
+      });
+    },
+    (err) => console.error("Firestore cells onSnapshot error:", err)
+  );
+
+  // Meta
+  onSnapshot(
+    metaCol,
+    (snap) => {
+      snap.docChanges().forEach((chg) => {
+        const d = chg.doc.data();
+        if (!d?.platform) return;
+
+        meta[d.platform] ||= { actual: "", futuro: "", etapa: "" };
+        if (typeof d.actual === "string") meta[d.platform].actual = d.actual;
+        if (typeof d.futuro === "string") meta[d.platform].futuro = d.futuro;
+        if (typeof d.etapa === "string") meta[d.platform].etapa = d.etapa;
+
+        saveMeta(meta);
+
+        // Update inputs (sin pisar si el usuario está escribiendo)
+        ["actual", "futuro", "etapa"].forEach((field) => {
+          const el = document.querySelector(
+            `.meta-input[data-pozo="${cssEscape(d.platform)}"][data-field="${field}"]`
+          );
+          if (el && document.activeElement !== el) {
+            el.value = meta[d.platform][field] || "";
+          }
+        });
+      });
+    },
+    (err) => console.error("Firestore meta onSnapshot error:", err)
+  );
+}
+
+/* =========================
+   Meta writes (debounced)
+========================= */
+const metaWriteTimers = new Map();
+
+function debounceMetaWrite(platform, field, value) {
+  const key = `${platform}__${field}`;
+  const prev = metaWriteTimers.get(key);
+  if (prev) clearTimeout(prev);
+
+  const t = setTimeout(() => {
+    pushMetaUpdate(platform, field, value).catch((err) => {
+      console.error("Firestore meta update failed:", err);
+    });
+    metaWriteTimers.delete(key);
+  }, 450);
+
+  metaWriteTimers.set(key, t);
+}
+
+async function pushMetaUpdate(platform, field, value) {
+  await setDoc(
+    doc(db, "projects", PROJECT_ID, "meta", platform),
+    {
+      platform,
+      [field]: value,
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true }
+  );
+}
+
+/* =========================
+   Helpers
+========================= */
 function statusClass(key) {
-  return STATUS.find(s => s.key === key)?.cls || "s-none";
+  return STATUS.find((s) => s.key === key)?.cls || "s-none";
 }
 
 function loadState() {
@@ -446,4 +512,24 @@ function loadMeta() {
 
 function saveMeta(next) {
   localStorage.setItem(LS_META_KEY, JSON.stringify(next));
+}
+
+// CSS.escape fallback (para selectores querySelector con textos)
+function cssEscape(str) {
+  if (window.CSS && typeof window.CSS.escape === "function") return window.CSS.escape(str);
+  return String(str).replace(/["\\#.;?+*~':!^$[\]()=>|/@]/g, "\\$&");
+}
+
+// DocID seguro para Firestore (evita / y caracteres problemáticos)
+function makeDocId(s) {
+  return base64UrlEncode(s);
+}
+
+function base64UrlEncode(input) {
+  // Unicode-safe base64url
+  const bytes = new TextEncoder().encode(String(input));
+  let bin = "";
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  const b64 = btoa(bin);
+  return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
