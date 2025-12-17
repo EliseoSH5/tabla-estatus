@@ -243,3 +243,49 @@ tbody td{
   display: block;
 }
 
+:root{
+  --sticky-platform-h: 0px;
+  --sticky-meta-actual-h: 0px;
+  --sticky-meta-futuro-h: 0px;
+}
+
+/* Plataformas */
+.platform-row th{
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: var(--header);
+}
+.platform-row th:first-child{
+  position: sticky;
+  top: 0;
+  left: 0;
+  z-index: 31;
+}
+
+/* Meta rows sticky */
+.meta-row th{
+  position: sticky;
+  z-index: 25;
+  background: #fff;              /* evita “huecos” visuales */
+  background-clip: padding-box;
+}
+
+/* Label meta (izquierda) */
+.meta-row th.meta-label{
+  position: sticky;
+  left: 0;
+  z-index: 28;
+  background: var(--header);
+}
+
+/* Offsets exactos (calculados por JS) */
+.meta-actual th{ top: var(--sticky-platform-h); }
+.meta-futuro th{ top: calc(var(--sticky-platform-h) + var(--sticky-meta-actual-h)); }
+.meta-etapa  th{ top: calc(var(--sticky-platform-h) + var(--sticky-meta-actual-h) + var(--sticky-meta-futuro-h)); }
+
+/* Opcional: línea sólida entre headers y contenido (más “plantilla”) */
+.meta-etapa th{
+  box-shadow: 0 2px 0 #000;
+}
+

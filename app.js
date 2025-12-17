@@ -190,6 +190,8 @@ function buildTable(tableEl) {
 
   for (const r of metaRows) {
     const tr = document.createElement("tr");
+    tr.className = `meta-row meta-${r.field}`; // meta-actual | meta-futuro | meta-etapa
+
 
     const thLabel = document.createElement("th");
     thLabel.className = "meta-label";
