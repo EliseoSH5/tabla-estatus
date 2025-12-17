@@ -9,10 +9,11 @@ import {
   doc,
   setDoc,
   onSnapshot,
-  serverTimestamp,
+  serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
 import { firebaseConfig } from "./firebase-config.js";
+
 
 /* =========================
    Firebase / Firestore setup
