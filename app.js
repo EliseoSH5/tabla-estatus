@@ -36,7 +36,7 @@ const LS_META_KEY = "sigma_matrix_meta_v1";
 /* =========================
    Catálogos base (ajusta a tus reales)
 ========================= */
-const pozos = ["PAE", "CME-II", "GRID", "GERSEMI", "CME-I", "NJORD", "GALAR", "RIG-702", "RIG-703"];
+const pozos = ["CME-II", "GERSEMI", "CME-I", "NJORD", "GALAR", "RIG-702", "RIG-703"];
 
 const items = [
   "CABEZAL",
