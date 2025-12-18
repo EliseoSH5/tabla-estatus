@@ -2,23 +2,25 @@
 <html lang="es">
 
 <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Matriz de estatus</title>
-    <link rel="stylesheet" href="./styles.css" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Matriz de estatus</title>
+  <link rel="stylesheet" href="./styles.css" />
 </head>
 
 <body>
+  <div class="app">
     <header class="app-header" aria-label="Encabezado">
-        <img src="./HEADER.png" alt="Opex" class="app-header-img" />
+      <img src="./HEADER.png" alt="Opex" class="app-header-img" />
     </header>
 
-    <div class="board" role="region" aria-label="Matriz de materiales por pozo">
-        <table id="matrix"></table>
-    </div>
-    </div>
+    <!-- ÚNICO contenedor con scroll -->
+    <main class="board" role="region" aria-label="Matriz de materiales por pozo">
+      <table id="matrix"></table>
+    </main>
+  </div>
 
-    <script type="module" src="./app.js"></script>
+  <script type="module" src="./app.js"></script>
 </body>
 
 </html>

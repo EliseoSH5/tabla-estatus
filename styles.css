@@ -420,3 +420,10 @@ tbody td{
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+html, body { height: 100%; margin: 0; }
+body { overflow: hidden; }        /* evita scroll del body */
+
+.app { height: 100vh; display: flex; flex-direction: column; }
+.board { flex: 1; overflow: auto; } /* único scroll */
+#matrix { width: max-content; min-width: 100%; }
