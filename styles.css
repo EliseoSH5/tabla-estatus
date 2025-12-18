@@ -289,3 +289,99 @@ tbody td{
   box-shadow: 0 2px 0 #000;
 }
 
+/* Mostrar botón de comentario solo al hover (y siempre si ya existe comentario) */
+.comment-btn{
+  position:absolute;
+  top: 4px;
+  right: 4px;
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  border: 1px solid #cfcfcf;
+  background:#fff;
+  cursor:pointer;
+  font-size: 14px;
+  line-height: 1;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.cell:hover .comment-btn{
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Si hay comentario, que se vea aunque no haya hover */
+.comment-btn.has-comment{
+  opacity: 1;
+  pointer-events: auto;
+  border-color: #999;
+}
+
+/* Panel del comentario */
+.comment-pop{
+  position:absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  width: 260px;
+  background:#fff;
+  border: 1px solid #d7d7d7;
+  border-radius: 12px;
+  box-shadow: 0 10px 22px rgba(0,0,0,.2);
+  padding: 10px;
+  display:none;
+}
+
+.comment-pop.open{ display:block; }
+
+.comment-pop textarea{
+  width:100%;
+  min-height: 90px;
+  resize: vertical;
+  border-radius: 10px;
+  border: 1px solid #d0d0d0;
+  padding: 8px;
+  font-family: inherit;
+  font-size: 14px;
+  outline: none;
+}
+
+.comment-actions{
+  display:flex;
+  justify-content:flex-end;
+  gap:8px;
+  margin-top: 8px;
+}
+
+.comment-actions button{
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 0;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.comment-cancel{
+  background:#efefef;
+}
+
+.comment-save{
+  background: var(--header);
+}
+
+/* Segunda subcolumna (siguiente) con línea divisoria */
+.subcol-next{
+  border-right: 2px solid #000;   /* o 1px si lo quieres más ligero */
+}
+
+/* También aplica para ETAPA (segunda celda) */
+.meta-sub-siguiente.subcol-next{
+  border-right: 2px solid #000;
+}
+
+
