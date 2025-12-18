@@ -385,3 +385,19 @@ tbody td{
 }
 
 
+/* Reduce el ancho de cada subcolumna (cada estatus) */
+#matrix td{
+  width: 120px;         /* prueba 44px; baja a 40px si quieres más cerrado */
+  min-width: 44px;
+}
+
+/* Reduce el ancho de cada input en ETAPA (porque también son subcolumnas) */
+#matrix thead .meta-sub{
+  width: 120px;
+  min-width: 44px;
+}
+
+/* Mantiene POZO ACTUAL/FUTURO (colspan=2) con espacio suficiente */
+#matrix thead .meta-cell[colspan="2"]{
+  min-width: calc(120px * 2);
+}
