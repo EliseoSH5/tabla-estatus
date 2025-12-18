@@ -401,3 +401,22 @@ tbody td{
 #matrix thead .meta-cell[colspan="2"]{
   min-width: calc(120px * 2);
 }
+
+/* Columna izquierda (materiales): limitar ancho */
+#matrix tbody th{
+  max-width: 220px;     /* ajusta: 200–280 suele funcionar bien */
+  width: 220px;         /* ayuda a mantenerlo estable */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* También aplica a la esquina superior/labels si quieres consistencia */
+#matrix thead th.corner,
+#matrix thead th.meta-label{
+  max-width: 220px;
+  width: 220px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
