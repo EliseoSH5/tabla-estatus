@@ -2,6 +2,9 @@
 // Requiere en index.html: <script type="module" src="./app.js"></script>
 // Requiere archivo: firebase-config.js exportando { firebaseConfig }
 
+let hydratedCells = false;
+let hydratedMeta = false;
+
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 import {
   getFirestore,
@@ -258,7 +261,7 @@ function buildTable(tableEl) {
   const metaRows = [
     { type: "single", field: "actual", label: "POZO ACTUAL", placeholder: "Ej. BACAB 308" },
     { type: "single", field: "futuro", label: "POZO FUTURO", placeholder: "Ej. BACAB 309" },
-    { type: "split",  fieldA: "etapa_actual", fieldB: "etapa_siguiente", label: "ETAPA", placeholderA: 'Ej. 20"', placeholderB: 'Ej. 17 1/2"' },
+    { type: "split", fieldA: "etapa_actual", fieldB: "etapa_siguiente", label: "ETAPA", placeholderA: 'Ej. 20"', placeholderB: 'Ej. 17 1/2"' },
   ];
 
   for (const r of metaRows) {
@@ -619,6 +622,24 @@ function listenRealtime() {
   onSnapshot(
     cellsCol,
     (snap) => {
+
+      if (!hydratedCells) {
+        hydratedCells = true;
+
+        if (snap.empty) {
+          localStorage.removeItem(LS_KEY);
+          localStorage.removeItem(LS_COMMENTS_KEY);
+
+          state = {};
+          comments = {};
+
+          const table = document.getElementById("matrix");
+          if (table) buildTable(table);
+
+          return; // importante: no procesar docChanges
+        }
+      }
+
       snap.docChanges().forEach((chg) => {
         const d = chg.doc.data();
         if (!d?.platform || !d?.item) return;
@@ -671,6 +692,22 @@ function listenRealtime() {
   onSnapshot(
     metaCol,
     (snap) => {
+
+      if (!hydratedMeta) {
+        hydratedMeta = true;
+
+        if (snap.empty) {
+          localStorage.removeItem(LS_META_KEY);
+          meta = {};
+
+          const table = document.getElementById("matrix");
+          if (table) buildTable(table);
+
+          return;
+        }
+      }
+
+
       snap.docChanges().forEach((chg) => {
         const d = chg.doc.data();
         if (!d?.platform) return;
