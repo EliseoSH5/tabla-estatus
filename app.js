@@ -48,6 +48,7 @@ const STAGES = [
 
 const items = [
   "CABEZAL",
+  "BARRENA",
   "FLUIDOS",
   "MOTOR DE FONDO / RSS",
   "GWD-LWD-MWD",
