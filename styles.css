@@ -161,6 +161,17 @@ tbody td{
 
 .menu.open{ display:block; }
 
+.pozo-link{
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.pozo-link:hover{
+  opacity: 0.85;
+}
+
+
 .menu-item{
   width:100%;
   display:flex;

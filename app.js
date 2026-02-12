@@ -41,6 +41,25 @@ const LS_COMMENTS_KEY = "sigma_matrix_comments_v2_split";
 ========================= */
 const pozos = ["CME-II", "GERSEMI", "CME-I", "NJORD", "GALAR", "RIG-702", "RIG-703"];
 
+// Vincula cada pozo a su URL (reemplaza por tus links reales)
+const POZO_LINKS = {
+  "CME-II":   "https://opexmxmx.sharepoint.com/:p:/r/sites/Opex-AKALInternal/_layouts/15/Doc.aspx?sourcedoc=%7B5572B0A2-533D-4739-90A3-F79CC092DFB0%7D&file=EMSC_RESUMEN_EJECUTIVO_100226.pptx&action=edit&mobileredirect=true",
+  "GERSEMI":  "https://opexmxmx.sharepoint.com/:p:/r/sites/Opex-AKALInternal/_layouts/15/Doc.aspx?sourcedoc=%7B5572B0A2-533D-4739-90A3-F79CC092DFB0%7D&file=EMSC_RESUMEN_EJECUTIVO_100226.pptx&action=edit&mobileredirect=true",
+  "CME-I":    "https://opexmxmx.sharepoint.com/:p:/r/sites/Opex-AKALInternal/_layouts/15/Doc.aspx?sourcedoc=%7B5572B0A2-533D-4739-90A3-F79CC092DFB0%7D&file=EMSC_RESUMEN_EJECUTIVO_100226.pptx&action=edit&mobileredirect=true",
+  "NJORD":    "https://opexmxmx.sharepoint.com/:p:/r/sites/Opex-AKALInternal/_layouts/15/Doc.aspx?sourcedoc=%7B5572B0A2-533D-4739-90A3-F79CC092DFB0%7D&file=EMSC_RESUMEN_EJECUTIVO_100226.pptx&action=edit&mobileredirect=true",
+  "GALAR":    "https://opexmxmx.sharepoint.com/:p:/r/sites/Opex-AKALInternal/_layouts/15/Doc.aspx?sourcedoc=%7B5572B0A2-533D-4739-90A3-F79CC092DFB0%7D&file=EMSC_RESUMEN_EJECUTIVO_100226.pptx&action=edit&mobileredirect=true",
+  "RIG-702":  "https://opexmxmx.sharepoint.com/:p:/r/sites/Opex-AKALInternal/_layouts/15/Doc.aspx?sourcedoc=%7B5572B0A2-533D-4739-90A3-F79CC092DFB0%7D&file=EMSC_RESUMEN_EJECUTIVO_100226.pptx&action=edit&mobileredirect=true",
+  "RIG-703":  "https://opexmxmx.sharepoint.com/:p:/r/sites/Opex-AKALInternal/_layouts/15/Doc.aspx?sourcedoc=%7B5572B0A2-533D-4739-90A3-F79CC092DFB0%7D&file=EMSC_RESUMEN_EJECUTIVO_100226.pptx&action=edit&mobileredirect=true",
+};
+
+function getPozoLink(pozo) {
+  const url = POZO_LINKS?.[pozo];
+  if (typeof url !== "string") return null;
+  const trimmed = url.trim();
+  return trimmed ? trimmed : null;
+}
+
+
 const STAGES = [
   { key: "actual", label: "Actual" },
   { key: "siguiente", label: "Siguiente" }
@@ -250,7 +269,27 @@ function buildTable(tableEl) {
     const th = document.createElement("th");
     th.className = "platform-group";
     th.colSpan = 2;               // IMPORTANT: cada plataforma = 2 subcolumnas
-    th.textContent = p;
+
+    // Pozo clickeable (si existe URL asociada)
+    const a = document.createElement("a");
+    a.textContent = p;
+    a.className = "pozo-link";
+
+    const url = getPozoLink(p);
+    if (url) {
+      a.href = url;
+      a.target = "_blank";                 // abre en nueva pestaña
+      a.rel = "noopener noreferrer";       // seguridad
+      a.title = `Abrir ${p}`;
+    } else {
+      // Si no hay link, no navega (pero se ve como texto)
+      a.href = "#";
+      a.addEventListener("click", (ev) => ev.preventDefault());
+      a.classList.add("is-disabled");
+      a.title = `Sin link configurado para ${p}`;
+    }
+
+    th.appendChild(a);
     trTop.appendChild(th);
   }
   thead.appendChild(trTop);
